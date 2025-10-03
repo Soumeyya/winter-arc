@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Winter Arc Trainer</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0ea5e9">
+<style>
+  :root { --bg:#0b1220; --card:#0f172a; --ink:#e5e7eb; --muted:#94a3b8; --accent:#0ea5e9; --good:#22c55e; --warn:#f59e0b; }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:var(--bg); color:var(--ink);}
+  header{position:sticky;top:0;z-index:10; backdrop-filter:saturate(1.2) blur(8px); background:rgba(11,18,32,.7); border-bottom:1px solid #1f2937;}
+  .wrap{max-width:980px;margin:0 auto;padding:16px}
+  h1{font-size:20px;margin:0;display:flex;align-items:center;gap:10px}
+  .grid{display:grid;gap:12px}
+  .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  label.btn,input[type=file]::file-selector-button,.btn{appearance:none;border:none;border-radius:12px;padding:10px 14px;background:#111827;color:var(--ink);border:1px solid #1f2937;cursor:pointer}
+  .btn.primary{background:var(--accent);border-color:transparent;color:white}
+  .btn.good{background:var(--good);border-color:transparent;color:white}
+  .btn.warn{background:var(--warn);border-color:transparent;color:black}
+  select, input[type="text"]{background:#0b1220;color:var(--ink);border:1px solid #1f2937;border-radius:10px;padding:8px 10px}
+  .tabs{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .tab{padding:8px;border:1px solid #1f2937;border-radius:10px;text-align:center;background:#0b1220;cursor:pointer;font-size:13px}
+  .tab.active{background:#111827;border-color:#334155}
+  .exercise{display:flex;gap:12px;align-items:center;padding:10px;border:1px solid #1f2937;border-radius:12px;background:#0b1220}
+  .exercise img{width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid #1f2937;background:#0b1220}
+  .exercise .meta{flex:1;min-width:0}
+  .title{font-weight:600}
+  .muted{color:var(--muted);font-size:12px}
+  .footer{position:sticky;bottom:0;background:rgba(11,18,32,.8);backdrop-filter:saturate(1.2) blur(8px);border-top:1px solid #1f2937}
+  .help{font-size:12px;color:var(--muted)}
+  .hint{background:#05202d;border:1px dashed #0ea5e9;color:#bae6fd;padding:10px;border-radius:12px}
+  .checkbox{width:28px;height:28px;border-radius:8px;border:2px solid #334155;display:grid;place-items:center;cursor:pointer}
+  .checkbox.done{background:var(--good);border-color:var(--good)}
+  .checkbox svg{width:18px;height:18px;fill:none;stroke:white;stroke-width:3;opacity:0}
+  .checkbox.done svg{opacity:1}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap}
+  .hidden{display:none}
+  .pill{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid #1f2937;background:#0b1220}
+  .status{font-size:12px}
+  dialog{border:none;border-radius:16px;padding:0;max-width:880px;width:calc(100% - 24px);background:var(--card);color:var(--ink)}
+  .modal-head{padding:14px 16px;border-bottom:1px solid #1f2937;display:flex;justify-content:space-between;align-items:center}
+  .modal-body{padding:14px 16px}
+  .mapper{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .list{border:1px solid #1f2937;border-radius:12px;overflow:hidden}
+  .list h3{margin:0;padding:8px 10px;border-bottom:1px solid #1f2937;background:#0b1220;font-size:14px}
+  .list .item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #0b1220}
+  .list .item:last-child{border-bottom:none}
+  .thumb{width:40px;height:40px;border-radius:8px;border:1px solid #1f2937;background:#0b1220;display:grid;place-items:center;overflow:hidden}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .flex-1{flex:1}
+  .search{width:100%}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap row" style="justify-content:space-between;">
+    <h1>🏋️ Winter Arc Trainer</h1>
+    <div class="toolbar">
+      <button class="btn" id="importCsvBtn">Import CSV</button>
+      <input class="hidden" id="csvInput" type="file" accept=".csv,text/csv" />
+      <label class="btn" for="imgInput">Add Images</label>
+      <input class="hidden" id="imgInput" type="file" accept="image/*" multiple />
+      <button class="btn" id="autoAssignBtn">Auto‑assign</button>
+      <button class="btn warn" id="openMapperBtn">Image Mapper</button>
+      <label class="pill"><input id="tryOnline" type="checkbox"> Online fallback</label>
+      <button class="btn" id="exportBtn">Export</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap grid" style="padding-top:12px;padding-bottom:90px;">
+  <section class="card grid">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div class="row" style="gap:10px">
+        <label>Week</label>
+        <select id="weekSelect"></select>
+      </div>
+      <div class="row status" id="status">No plan</div>
+    </div>
+
+    <div class="tabs" id="dayTabs"></div>
+    <div id="exList" class="grid"></div>
+
+    <div class="hint">
+      <b>Tip</b> — After adding images, use <b>Auto‑assign</b>. If some remain unmatched, open <b>Image Mapper</b> to manually link exercises ↔ images in seconds.
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap row" style="justify-content:space-between;align-items:center;padding:10px 16px;">
+    <div class="help">Add to Home Screen for app-like use. Progress saves locally.</div>
+    <button class="btn primary" id="installBtn">Install</button>
+  </div>
+</footer>
+
+<dialog id="mapper">
+  <div class="modal-head">
+    <strong>Image Mapper</strong>
+    <button class="btn" onclick="mapper.close()">Close</button>
+  </div>
+  <div class="modal-body grid">
+    <div class="row" style="justify-content:space-between;gap:10px">
+      <input id="searchEx" class="search" placeholder="Search exercise…" />
+      <input id="searchImg" class="search" placeholder="Search images…" />
+    </div>
+    <div class="mapper">
+      <div class="list" id="exListMap">
+        <h3>Exercises (tap to select)</h3>
+        <div id="exItems"></div>
+      </div>
+      <div class="list" id="imgListMap">
+        <h3>Images (tap to assign)</h3>
+        <div id="imgItems"></div>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn good" id="clearImageBtn">Clear image for selected</button>
+      <button class="btn" id="onlineFetchBtn">Fetch online for selected</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+// ---------- Utilities ----------
+const $ = s => document.querySelector(s);
+const byId = id => document.getElementById(id);
+const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+const tokens = s => norm(s).split(' ').filter(Boolean);
+function jaccard(a,b){ const A=new Set(a), B=new Set(b); const i=[...A].filter(x=>B.has(x)).length; const u=new Set([...A,...B]).size; return u? i/u : 0; }
+function keyFor(w, d, name) { return `${w}|${d}|${name}`; }
+
+// ---------- State ----------
+let PLAN = JSON.parse(localStorage.getItem('wa_plan') || '[]');
+let PROGRESS = JSON.parse(localStorage.getItem('wa_progress') || '{}');
+let IMAGES = {}; // name -> ObjectURL
+let IMAGE_MAP = JSON.parse(localStorage.getItem('wa_image_map') || '{}');
+let deferredPrompt;
+
+function saveAll(){
+  localStorage.setItem('wa_plan', JSON.stringify(PLAN));
+  localStorage.setItem('wa_progress', JSON.stringify(PROGRESS));
+  localStorage.setItem('wa_image_map', JSON.stringify(IMAGE_MAP));
+}
+
+// ---------- Synonyms to improve matching ----------
+const SYN = {
+  "glute bridge": ["hip thrust","bridging"],
+  "hip thrust": ["glute bridge"],
+  "leg curl": ["hamstring curl","hamstrings curl"],
+  "lat pulldown": ["lat pull down","pulldown","lat pull"],
+  "seated row": ["row machine","rowing machine","cable row"],
+  "treadmill": ["walk","incline treadmill","brisk walk"],
+  "bike": ["stationary bike","cycling"],
+  "face pulls": ["face pull","cable face pull"],
+  "back extensions": ["back extension","hyperextension"],
+  "calf raises": ["calf raise"]
+};
+
+function expandTerms(name){
+  const t = [name];
+  const n = norm(name);
+  for (const k in SYN){
+    if (n.includes(norm(k))) t.push(...SYN[k]);
+  }
+  return t;
+}
+
+// ---------- Icons (fallback visuals) ----------
+const ICONS = {
+  "leg press": `<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 19h18v2H3zM6 17h2l2-5h2l1 3h2l1-3h2l2 5h2l-3-8h-4l-1 3-1-3H9z"/></svg>`,
+  "leg curl": `<svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="2" fill="currentColor"/><path d="M6 18L14 6h4" stroke="currentColor" stroke-width="2" fill="none"/></svg>`,
+  "hip thrust": `<svg viewBox="0 0 24 24"><rect x="3" y="10" width="18" height="4" rx="2" fill="currentColor"/><circle cx="7" cy="12" r="2" fill="#0b1220"/><circle cx="17" cy="12" r="2" fill="#0b1220"/></svg>`,
+  "glute bridge": `<svg viewBox="0 0 24 24"><path d="M3 16c4-6 14-6 18 0" stroke="currentColor" stroke-width="2" fill="none"/></svg>`,
+  "calf raise": `<svg viewBox="0 0 24 24"><path d="M6 20h12M8 18v-6m8 6v-8" stroke="currentColor" stroke-width="2" fill="none"/></svg>`,
+  "treadmill": `<svg viewBox="0 0 24 24"><path d="M3 18h14l3-8" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="6" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/></svg>`,
+  "bike": `<svg viewBox="0 0 24 24"><circle cx="6" cy="17" r="3" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="18" cy="17" r="3" stroke="currentColor" stroke-width="2" fill="none"/><path d="M9 17l3-8h3l2 5" stroke="currentColor" stroke-width="2" fill="none"/></svg>`,
+  "kickback": `<svg viewBox="0 0 24 24"><path d="M4 12h8l6-6" stroke="currentColor" stroke-width="2" fill="none"/></svg>`,
+  "band walk": `<svg viewBox="0 0 24 24"><rect x="5" y="15" width="14" height="3" rx="1.5" fill="currentColor"/></svg>`,
+  "seated row": `<svg viewBox="0 0 24 24"><path d="M4 12h10" stroke="currentColor" stroke-width="2"/><circle cx="15" cy="12" r="2" fill="currentColor"/></svg>`,
+  "lat pulldown": `<svg viewBox="0 0 24 24"><path d="M4 6h16M12 6v8" stroke="currentColor" stroke-width="2"/></svg>`,
+  "back extension": `<svg viewBox="0 0 24 24"><path d="M4 16c4-4 12-4 16 0" stroke="currentColor" stroke-width="2" fill="none"/></svg>`,
+  "face pull": `<svg viewBox="0 0 24 24"><path d="M6 12h12" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="12" r="2" fill="currentColor"/><circle cx="18" cy="12" r="2" fill="currentColor"/></svg>`,
+  "bird dog": `<svg viewBox="0 0 24 24"><path d="M4 14h10l6-4" stroke="currentColor" stroke-width="2" fill="none"/></svg>`,
+  "side plank": `<svg viewBox="0 0 24 24"><path d="M6 18l12-6" stroke="currentColor" stroke-width="2"/></svg>`,
+  "walk": `<svg viewBox="0 0 24 24"><path d="M7 20l3-6 4 2 3-6" stroke="currentColor" stroke-width="2" fill="none"/></svg>`,
+  "stretch": `<svg viewBox="0 0 24 24"><path d="M4 18c6-8 10-8 16 0" stroke="currentColor" stroke-width="2" fill="none"/></svg>`
+};
+function iconFor(name){
+  const n = norm(name);
+  for (const k in ICONS) { if (n.includes(k)) return ICONS[k]; }
+  return null;
+}
+
+// ---------- DOM refs ----------
+const weekSelect = byId('weekSelect');
+const dayTabs = byId('dayTabs');
+const exList = byId('exList');
+const status = byId('status');
+const csvInput = byId('csvInput');
+const imgInput = byId('imgInput');
+const importCsvBtn = byId('importCsvBtn');
+const exportBtn = byId('exportBtn');
+const autoAssignBtn = byId('autoAssignBtn');
+const openMapperBtn = byId('openMapperBtn');
+const installBtn = byId('installBtn');
+const mapper = byId('mapper');
+const searchEx = byId('searchEx');
+const searchImg = byId('searchImg');
+const exItems = byId('exItems');
+const imgItems = byId('imgItems');
+const tryOnline = byId('tryOnline');
+
+// ---------- CSV Parsing ----------
+function parseCSV(text){
+  const rows = [];
+  let i = 0, field = '', row = [], inQuotes = false;
+  while (i < text.length) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i+1] === '"') { field += '"'; i++; } else { inQuotes = false; }
+      } else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(field.trim()); field=''; }
+      else if (c === '\n' || c === '\r') { if (field.length || row.length) { row.push(field.trim()); rows.push(row); row=[]; field=''; } if (c === '\r' && text[i+1] === '\n') i++; }
+      else field += c;
+    }
+    i++;
+  }
+  if (field.length || row.length) { row.push(field.trim()); rows.push(row); }
+  return rows;
+}
+
+// ---------- Rendering ----------
+function refreshWeekSelect(){
+  const weeks = [...new Set(PLAN.map(r => Number(r.week)).filter(Boolean))].sort((a,b)=>a-b);
+  weekSelect.innerHTML = weeks.length ? weeks.map(w => `<option value="${w}">Week ${w}</option>`).join('') : `<option value="1">Week 1</option>`;
+  if (!weeks.length) weekSelect.value = "1";
+}
+function renderTabs(active){
+  dayTabs.innerHTML = DAYS.map(d => `<button class="tab ${d===active?'active':''}" data-day="${d}">${d.slice(0,3)}</button>`).join('');
+  dayTabs.querySelectorAll('.tab').forEach(b => b.onclick = () => { renderTabs(b.dataset.day); renderList(Number(weekSelect.value), b.dataset.day); });
+}
+function renderList(week, day){
+  const rows = PLAN.filter(r => Number(r.week)===Number(week) && r.day.toLowerCase()===day.toLowerCase());
+  if (!rows.length) { exList.innerHTML = `<div class="muted">No exercises for ${day} in Week ${week}.</div>`; return; }
+  exList.innerHTML = '';
+  rows.forEach(r => {
+    const k = keyFor(week, day, r.exercise);
+    const done = !!PROGRESS[k];
+    const mapped = IMAGE_MAP[r.exercise] || r.image || '';
+    const url = mapped && IMAGES[mapped] ? IMAGES[mapped] : '';
+    const icon = iconFor(r.exercise);
+    const visual = url ? `<img alt="img" src="${url}">` : (icon ? `<div class="thumb" style="width:64px;height:64px;color:#93c5fd">${icon}</div>` : `<div class="thumb" style="width:64px;height:64px;border:1px dashed #334155">No image</div>`);
+    const div = document.createElement('div');
+    div.className = 'exercise';
+    div.innerHTML = `
+      ${visual}
+      <div class="meta">
+        <div class="title">${r.exercise}</div>
+        <div class="muted">${r.reps||''}</div>
+      </div>
+      <div class="checkbox ${done?'done':''}" data-key="${k}">
+        <svg viewBox="0 0 24 24"><path d="M4 12l5 5 11-11"/></svg>
+      </div>`;
+    exList.appendChild(div);
+  });
+  exList.querySelectorAll('.checkbox').forEach(b => b.onclick = () => {
+    const k = b.dataset.key;
+    if (b.classList.toggle('done')) PROGRESS[k]=true; else delete PROGRESS[k];
+    saveAll();
+  });
+  updateStatus();
+}
+function updateStatus(){
+  const total = PLAN.length;
+  const done = Object.keys(PROGRESS).length;
+  const mapped = Object.values(IMAGE_MAP).filter(Boolean).length;
+  status.textContent = `${total} items • ${done} done • ${mapped} mapped images`;
+}
+
+// ---------- Importers ----------
+importCsvBtn.onclick = ()=> csvInput.click();
+csvInput.onchange = async (e)=>{
+  const f = e.target.files?.[0]; if (!f) return;
+  const text = await f.text();
+  const rows = parseCSV(text);
+  if (!rows.length) return alert('Empty CSV');
+  const head = rows[0].map(h => h.toLowerCase());
+  const idx = { week:head.indexOf('week'), day:head.indexOf('day'), exercise:head.indexOf('exercise'), reps:head.indexOf('reps'), image:head.indexOf('image') };
+  if (Object.values(idx).some(i => i===-1)) return alert('CSV must include columns: week, day, exercise, reps, image');
+  PLAN = rows.slice(1).map(r => ({ week:r[idx.week], day:r[idx.day], exercise:r[idx.exercise], reps:r[idx.reps], image:r[idx.image] }));
+  saveAll();
+  refreshWeekSelect();
+  renderTabs(DAYS[new Date().getDay()-1]||'Monday');
+  renderList(Number(weekSelect.value), DAYS[new Date().getDay()-1]||'Monday');
+  csvInput.value='';
+  updateStatus();
+};
+
+imgInput.onchange = (e)=>{
+  const files = Array.from(e.target.files||[]);
+  files.forEach(f => { IMAGES[f.name]=URL.createObjectURL(f); });
+  localStorage.setItem('wa_images', JSON.stringify(Object.keys(IMAGES)));
+  updateStatus();
+};
+
+// ---------- Auto-assign ----------
+function scoreNameToFile(exName, fileName){
+  // token Jaccard + synonym expansion
+  const exVariants = expandTerms(exName);
+  let best = 0;
+  exVariants.forEach(v => {
+    const a = tokens(v);
+    const b = tokens(fileName.replace(/\.[a-z0-9]+$/i,''));
+    best = Math.max(best, jaccard(a,b));
+  });
+  return best;
+}
+
+async function autoAssign(online=false){
+  let assigned=0, total=0;
+  const fileNames = Object.keys(IMAGES);
+  for (const r of PLAN){
+    total++;
+    if (IMAGE_MAP[r.exercise]) continue;
+    // pick best local file
+    let best = {name:null,score:-1};
+    for (const fn of fileNames){
+      const s = scoreNameToFile(r.exercise, fn);
+      if (s > best.score) best = {name:fn, score:s};
+    }
+    if (best.score >= 0.34) { // relaxed threshold
+      IMAGE_MAP[r.exercise] = best.name;
+      assigned++;
+    } else if (online){
+      const url = await fetchWikiThumb(r.exercise);
+      if (url){
+        const blob = await fetch(url).then(r=>r.blob()).catch(()=>null);
+        if (blob){
+          const fname = `web_${norm(r.exercise).replace(/\s+/g,'_')}.jpg`;
+          IMAGES[fname] = URL.createObjectURL(blob);
+          IMAGE_MAP[r.exercise] = fname;
+          assigned++;
+        }
+      }
+    }
+  }
+  saveAll();
+  updateStatus();
+  const active = document.querySelector('.tab.active')?.dataset.day || DAYS[0];
+  renderList(Number(weekSelect.value), active);
+  alert(`Auto‑assign: mapped ${assigned}/${total} exercises`);
+}
+autoAssignBtn.onclick = ()=> autoAssign(tryOnline.checked);
+
+async function fetchWikiThumb(query){
+  try{
+    const url = `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=thumbnail&pithumbsize=240&origin=*&titles=${encodeURIComponent(query)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const pages = data?.query?.pages || {};
+    for (const k in pages){
+      const p = pages[k];
+      if (p.thumbnail && p.thumbnail.source) return p.thumbnail.source;
+    }
+  }catch(e){}
+  return null;
+}
+
+// ---------- Mapper UI ----------
+let selectedExercise = null;
+openMapperBtn.onclick = ()=>{
+  buildMapperLists();
+  mapper.showModal();
+};
+
+function buildMapperLists(){
+  const exSet = new Set(PLAN.map(p=>p.exercise));
+  const exArr = [...exSet].sort();
+  const imgArr = Object.keys(IMAGES).sort();
+
+  const exQuery = norm(searchEx.value||'');
+  const imgQuery = norm(searchImg.value||'');
+
+  exItems.innerHTML = '';
+  exArr.filter(x => !exQuery || norm(x).includes(exQuery)).forEach(ex => {
+    const mapped = IMAGE_MAP[ex] || '';
+    const row = document.createElement('div');
+    row.className = 'item';
+    row.innerHTML = `
+      <div class="thumb" style="width:36px;height:36px;background:#0b1220;color:#93c5fd">${iconFor(ex)||''}</div>
+      <div class="flex-1">
+        <div>${ex}</div>
+        <div class="muted">${mapped ? 'Image: '+mapped : 'No image'}</div>
+      </div>
+      <button class="btn" data-ex="${ex}">Select</button>`;
+    exItems.appendChild(row);
+  });
+
+  imgItems.innerHTML = '';
+  imgArr.filter(n => !imgQuery || norm(n).includes(imgQuery)).forEach(fn => {
+    const row = document.createElement('div');
+    row.className = 'item';
+    row.innerHTML = `
+      <div class="thumb"><img src="${IMAGES[fn]||''}"></div>
+      <div class="flex-1">${fn}</div>
+      <button class="btn good" data-fn="${fn}">Assign</button>`;
+    imgItems.appendChild(row);
+  });
+
+  exItems.querySelectorAll('button').forEach(b => b.onclick = ()=>{
+    selectedExercise = b.dataset.ex;
+    Array.from(exItems.querySelectorAll('button')).forEach(x=>x.textContent='Select');
+    b.textContent='Selected';
+  });
+  imgItems.querySelectorAll('button').forEach(b => b.onclick = ()=>{
+    if (!selectedExercise) return alert('Select an exercise first');
+    IMAGE_MAP[selectedExercise] = b.dataset.fn;
+    saveAll();
+    buildMapperLists();
+    updateStatus();
+  });
+}
+
+searchEx.oninput = buildMapperLists;
+searchImg.oninput = buildMapperLists;
+byId('clearImageBtn').onclick = ()=>{
+  if (!selectedExercise) return alert('Select an exercise first');
+  delete IMAGE_MAP[selectedExercise];
+  saveAll();
+  buildMapperLists();
+  updateStatus();
+};
+byId('onlineFetchBtn').onclick = async ()=>{
+  if (!selectedExercise) return alert('Select an exercise first');
+  const url = await fetchWikiThumb(selectedExercise);
+  if (!url) return alert('No online image found');
+  const blob = await fetch(url).then(r=>r.blob()).catch(()=>null);
+  if (!blob) return alert('Download failed');
+  const fname = `web_${norm(selectedExercise).replace(/\s+/g,'_')}.jpg`;
+  IMAGES[fname] = URL.createObjectURL(blob);
+  IMAGE_MAP[selectedExercise] = fname;
+  saveAll();
+  buildMapperLists();
+  updateStatus();
+};
+
+// ---------- Init ----------
+(function init(){
+  try { JSON.parse(localStorage.getItem('wa_images')||'[]').forEach(n => IMAGES[n]=IMAGES[n]||null); } catch {}
+  refreshWeekSelect();
+  renderTabs(DAYS[new Date().getDay()-1]||'Monday');
+  renderList(Number(weekSelect.value), DAYS[new Date().getDay()-1]||'Monday');
+  updateStatus();
+})();
+
+// ---------- Export ----------
+exportBtn.onclick = ()=>{
+  const lines = ['week,day,exercise,reps,done,imageFile'];
+  PLAN.forEach(r => {
+    const k = keyFor(r.week, r.day, r.exercise);
+    const mapped = IMAGE_MAP[r.exercise] || r.image || '';
+    lines.push([r.week, r.day, JSON.stringify(r.exercise), JSON.stringify(r.reps||''), PROGRESS[k]?'1':'0', JSON.stringify(mapped)].join(','));
+  });
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'winter_arc_progress.csv';
+  a.click();
+};
+
+// ---------- PWA basics ----------
+window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; installBtn.disabled=false; });
+installBtn.onclick = ()=>{ if (deferredPrompt) deferredPrompt.prompt(); else alert('Share → Add to Home Screen'); };
+if ('serviceWorker' in navigator) {
+  const swBlob = new Blob([`self.addEventListener('fetch',()=>{})`], {type:'text/javascript'});
+  const swUrl = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swUrl);
+}
+</script>
+</body>
+</html>
