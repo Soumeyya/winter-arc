@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Winter Arc — Auto GIFs (Import Fix)</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0ea5e9">
+<style>
+  :root { --bg:#0b1220; --card:#0f172a; --ink:#e5e7eb; --muted:#94a3b8; --accent:#0ea5e9; --good:#22c55e; }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--ink);}
+  header{position:sticky;top:0;z-index:10;background:rgba(11,18,32,.7);backdrop-filter:saturate(1.2) blur(8px);border-bottom:1px solid #1f2937}
+  .wrap{max-width:980px;margin:0 auto;padding:16px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .grid{display:grid;gap:12px}
+  .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:14px}
+  h1{font-size:20px;margin:0;display:flex;align-items:center;gap:10px}
+  .btn{appearance:none;border:none;border-radius:12px;padding:10px 14px;background:#111827;color:var(--ink);border:1px solid #1f2937;cursor:pointer}
+  .btn.primary{background:var(--accent);color:white;border-color:transparent}
+  .btn.good{background:#22c55e;color:white;border-color:transparent}
+  .pill{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid #1f2937;background:#0b1220}
+  select{background:#0b1220;color:var(--ink);border:1px solid #1f2937;border-radius:10px;padding:8px 10px}
+  .tabs{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .tab{padding:8px;border:1px solid #1f2937;border-radius:10px;text-align:center;background:#0b1220;cursor:pointer;font-size:13px}
+  .tab.active{background:#111827;border-color:#334155}
+  .exercise{display:flex;gap:12px;align-items:center;padding:10px;border:1px solid #1f2937;border-radius:12px;background:#0b1220}
+  .thumb{width:72px;height:72px;border-radius:10px;border:1px solid #1f2937;display:grid;place-items:center;overflow:hidden;background:#0b1220}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .exercise .meta{flex:1;min-width:0}
+  .title{font-weight:600}
+  .muted{color:var(--muted);font-size:12px}
+  .checkbox{width:28px;height:28px;border-radius:8px;border:2px solid #334155;display:grid;place-items:center;cursor:pointer}
+  .checkbox.done{background:#22c55e;border-color:#22c55e}
+  .checkbox svg{width:18px;height:18px;fill:none;stroke:white;stroke-width:3;opacity:0}
+  .checkbox.done svg{opacity:1}
+  .status{font-size:12px}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:16px}
+  .modal .box{background:#0f172a;border:1px solid #1f2937;border-radius:16px;max-width:720px;width:100%;padding:16px;display:grid;gap:10px}
+  textarea{width:100%;height:200px;background:#0b1220;color:var(--ink);border:1px solid #1f2937;border-radius:10px;padding:10px}
+  .drop{padding:16px;border:2px dashed #334155;border-radius:12px;text-align:center;color:#94a3b8}
+  .drop.drag{border-color:#0ea5e9;color:#bae6fd;background:#04131c}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap row" style="justify-content:space-between;">
+    <h1>🏋️ Winter Arc — Auto GIFs (Import Fix)</h1>
+    <div class="row">
+      <label for="csvInput" class="btn">Import CSV</label>
+      <input id="csvInput" type="file" accept=".csv,text/csv" style="position:absolute;width:1px;height:1px;left:-9999px;opacity:0" />
+      <button class="btn" id="pasteBtn">Paste CSV</button>
+      <button class="btn good" id="fetchBtn">Fetch GIFs</button>
+      <button class="btn primary" id="installBtn">Install</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap grid" style="padding-top:12px;padding-bottom:90px;">
+  <section class="card grid">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div class="row" style="gap:10px">
+        <label>Week</label>
+        <select id="weekSelect"></select>
+        <span class="pill" id="status">No plan</span>
+      </div>
+    </div>
+    <div id="dropZone" class="drop">Drop CSV here (optional)</div>
+    <div class="tabs" id="dayTabs"></div>
+    <div id="exList" class="grid"></div>
+    <details>
+      <summary>Fetcher log</summary>
+      <pre id="log"></pre>
+    </details>
+    <div class="muted">Tip: If tapping Import does nothing, use <b>Paste CSV</b> or drop the file above.</div>
+  </section>
+</main>
+
+<div id="modal" class="modal">
+  <div class="box">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <b>Paste CSV</b>
+      <button class="btn" id="closeModal">Close</button>
+    </div>
+    <textarea id="csvText" placeholder="week,day,exercise,reps,image\n1,Monday,Leg press,3x12,\n..."></textarea>
+    <div class="row" style="justify-content:flex-end">
+      <button class="btn good" id="importTextBtn">Import</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+function tokens(s){ return norm(s).split(' ').filter(Boolean); }
+function jaccard(a,b){ const A=new Set(a), B=new Set(b); const i=[...A].filter(x=>B.has(x)).length; const u=new Set([...A,...B]).size; return u? i/u : 0; }
+function keyFor(w, d, name) { return `${w}|${d}|${name}`; }
+function log(m){ const el=$('#log'); el.textContent += m + "\\n"; }
+
+let PLAN = JSON.parse(localStorage.getItem('wa_plan') || '[]');
+let PROGRESS = JSON.parse(localStorage.getItem('wa_progress') || '{}');
+let MEDIA_MAP = JSON.parse(localStorage.getItem('wa_media_map') || '{}');
+let EXDB = [];
+
+function saveAll(){
+  localStorage.setItem('wa_plan', JSON.stringify(PLAN));
+  localStorage.setItem('wa_progress', JSON.stringify(PROGRESS));
+  localStorage.setItem('wa_media_map', JSON.stringify(MEDIA_MAP));
+}
+
+const weekSelect = $('#weekSelect'), dayTabs = $('#dayTabs'), exList = $('#exList'), statusEl = $('#status');
+const csvInput = $('#csvInput'), pasteBtn = $('#pasteBtn'), modal = $('#modal'), csvText = $('#csvText'), closeModal = $('#closeModal');
+const fetchBtn = $('#fetchBtn'), installBtn = $('#installBtn');
+const dropZone = $('#dropZone');
+
+function parseCSV(text){
+  if(!text) return [];
+  const rows = []; let i=0, field='', row=[], q=false;
+  while(i<text.length){ const c=text[i];
+    if(q){ if(c=='"'){ if(text[i+1]=='"'){ field+='"'; i++; } else q=false; } else field+=c; }
+    else { if(c=='"') q=true; else if(c==','){ row.push(field.trim()); field=''; }
+      else if(c=='\\n'||c=='\\r'){ if(field.length||row.length){ row.push(field.trim()); rows.push(row); row=[]; field=''; } if(c=='\\r'&&text[i+1]=='\\n') i++; }
+      else field+=c; }
+    i++;
+  }
+  if(field.length||row.length){ row.push(field.trim()); rows.push(row); }
+  return rows;
+}
+
+function importRows(rows){
+  if(!rows.length) { alert('Empty CSV'); return; }
+  const head = rows[0].map(h=>h.toLowerCase().trim());
+  const idx = {week:head.indexOf('week'), day:head.indexOf('day'), exercise:head.indexOf('exercise'), reps:head.indexOf('reps'), image:head.indexOf('image')};
+  if(Object.values(idx).some(i=>i===-1)){
+    alert('CSV must include headers: week, day, exercise, reps, image');
+    return;
+  }
+  PLAN = rows.slice(1).filter(r=>r.length>=4).map(r=>({week:r[idx.week], day:r[idx.day], exercise:r[idx.exercise], reps:r[idx.reps], image:r[idx.image]||''}));
+  saveAll();
+  refreshWeekSelect();
+  renderTabs(DAYS[new Date().getDay()-1]||'Monday');
+  renderList(Number(weekSelect.value), DAYS[new Date().getDay()-1]||'Monday');
+  statusEl.textContent = `Imported ${PLAN.length} rows`;
+}
+
+csvInput.addEventListener('change', async (e)=>{
+  const f = e.target.files?.[0]; if(!f) return;
+  const text = await f.text();
+  importRows(parseCSV(text));
+  csvInput.value = '';
+});
+
+pasteBtn.onclick = ()=>{ modal.style.display='flex'; setTimeout(()=>csvText.focus(), 0); };
+closeModal.onclick = ()=>{ modal.style.display='none'; };
+$('#importTextBtn').onclick = ()=>{
+  const text = csvText.value;
+  importRows(parseCSV(text));
+  modal.style.display='none';
+};
+
+['dragenter','dragover'].forEach(evt => dropZone.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropZone.classList.add('drag'); }));
+['dragleave','drop'].forEach(evt => dropZone.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drag'); }));
+dropZone.addEventListener('drop', async (e)=>{
+  const f = e.dataTransfer.files?.[0]; if(!f) return;
+  const text = await f.text();
+  importRows(parseCSV(text));
+});
+
+function refreshWeekSelect(){
+  const weeks = [...new Set(PLAN.map(r=>Number(r.week)).filter(Boolean))].sort((a,b)=>a-b);
+  weekSelect.innerHTML = weeks.length? weeks.map(w=>`<option value="${w}">Week ${w}</option>`).join('') : `<option value="1">Week 1</option>`;
+  if(!weeks.length) weekSelect.value="1";
+}
+function renderTabs(active){
+  dayTabs.innerHTML = DAYS.map(d=>`<button class="tab ${d===active?'active':''}" data-day="${d}">${d.slice(0,3)}</button>`).join('');
+  dayTabs.querySelectorAll('.tab').forEach(b=> b.onclick=()=>{ renderTabs(b.dataset.day); renderList(Number(weekSelect.value), b.dataset.day); });
+}
+function renderList(week, day){
+  const rows = PLAN.filter(r => Number(r.week)===Number(week) && r.day.toLowerCase()===day.toLowerCase());
+  if(!rows.length){ exList.innerHTML = `<div class="muted">No exercises for ${day} in Week ${week}.</div>`; return; }
+  exList.innerHTML='';
+  rows.forEach(r=>{
+    const k = keyFor(week, day, r.exercise);
+    const done = !!PROGRESS[k];
+    const dataUrl = MEDIA_MAP[r.exercise] || '';
+    const div = document.createElement('div');
+    div.className='exercise';
+    div.innerHTML = `
+      ${dataUrl ? `<div class="thumb"><img alt="gif" src="${dataUrl}"></div>` : `<div class="thumb"><span class="muted">No GIF</span></div>`}
+      <div class="meta">
+        <div class="title">${r.exercise}</div>
+        <div class="muted">${r.reps||''}</div>
+      </div>
+      <div class="checkbox ${done?'done':''}" data-key="${k}">
+        <svg viewBox="0 0 24 24"><path d="M4 12l5 5 11-11"/></svg>
+      </div>`;
+    exList.appendChild(div);
+  });
+  exList.querySelectorAll('.checkbox').forEach(b=> b.onclick=()=>{
+    const k=b.dataset.key; if(b.classList.toggle('done')) PROGRESS[k]=true; else delete PROGRESS[k]; saveAll();
+  });
+  updateStatus();
+}
+function updateStatus(){
+  const unique = new Set(PLAN.map(p=>p.exercise)).size;
+  const mapped = Object.keys(MEDIA_MAP).length;
+  statusEl.textContent = `${PLAN.length} items • ${Object.keys(PROGRESS).length} done • GIFs: ${mapped}/${unique}`;
+}
+
+const EXDB_URL = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises.json";
+const SYN = {
+  "glute bridge / hip thrust": ["glute bridge", "hip thrust"],
+  "glute bridge": ["hip thrust"],
+  "hip thrust": ["glute bridge"],
+  "leg curl (hamstrings)": ["leg curl","hamstring curl","seated leg curl","lying leg curl"],
+  "calf raises": ["standing calf raise","calf raise"],
+  "incline treadmill walk": ["treadmill walk","incline walking","treadmill walking"],
+  "brisk walk cooldown": ["brisk walk","treadmill walk"],
+  "fast walking": ["brisk walk","treadmill walk"],
+  "glute kickbacks": ["glute kickback","cable glute kickback","donkey kick"],
+  "seated row (machine)": ["seated row","machine row","cable seated row"],
+  "lat pulldown (light-moderate)": ["lat pulldown","wide grip lat pulldown"],
+  "back extensions": ["back extension","hyperextension","roman chair back extension"],
+  "face pulls (light cable/band)": ["face pull"],
+  "gentle stretch (hips + back)": ["hip stretch","back stretch","cat cow","child pose","cobra stretch","child's pose"],
+  "brisk walk": ["treadmill walking"]
+};
+let EXDB = [];
+
+function variantsFor(name){
+  const set = new Set([name]);
+  const n = norm(name);
+  for(const k in SYN){ if(n.includes(norm(k))) SYN[k].forEach(v => set.add(v)); }
+  return [...set];
+}
+async function loadExDB(){
+  if (EXDB.length) return EXDB;
+  const res = await fetch(EXDB_URL);
+  EXDB = await res.json();
+  return EXDB;
+}
+function bestMatch(query, list){
+  const qt = tokens(query);
+  let best = null, bestScore = -1;
+  for(const item of list){
+    const it = tokens(item.name || "");
+    const score = jaccard(qt, it);
+    if(score > bestScore){ best = item; bestScore = score; }
+  }
+  return {item:best, score:bestScore};
+}
+async function fetchAuto(){
+  await loadExDB();
+  const uniq = [...new Set(PLAN.map(p=>p.exercise))];
+  let ok=0, miss=[];
+  for(const ex of uniq){
+    if(MEDIA_MAP[ex]) continue;
+    const vars = variantsFor(ex);
+    let found=null, score=-1;
+    for(const v of vars){
+      const m = bestMatch(v, EXDB);
+      if(m.score > score){ found=m.item; score=m.score; }
+      if(score >= 0.52) break;
+    }
+    if(!found || !found.gifUrl){ log(`No match for: ${ex}`); miss.push(ex); continue; }
+    try{
+      const blob = await fetch(found.gifUrl, {mode:'cors'}).then(r=>r.blob());
+      const dataUrl = await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(blob); });
+      MEDIA_MAP[ex] = dataUrl;
+      ok++;
+      saveAll();
+      const active = document.querySelector('.tab.active')?.dataset.day || DAYS[0];
+      renderList(Number(weekSelect.value), active);
+      log(`Mapped: ${ex} ← ${found.name} (${(score*100|0)}%)`);
+    }catch(e){
+      log(`Download failed for ${ex}: ${e}`);
+      miss.push(ex);
+    }
+  }
+  updateStatus();
+  alert(`Auto‑fetched ${ok} GIFs${miss.length?`. Missing: ${miss.slice(0,4).join(', ')}${miss.length>4?'…':''}`:''}`);
+}
+fetchBtn.onclick = fetchAuto;
+
+(function init(){
+  refreshWeekSelect();
+  renderTabs(DAYS[new Date().getDay()-1]||'Monday');
+  renderList(Number(weekSelect.value), DAYS[new Date().getDay()-1]||'Monday');
+  updateStatus();
+})();
+
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; });
+installBtn.onclick = ()=>{ if (deferredPrompt) deferredPrompt.prompt(); else alert('Share → Add to Home Screen'); };
+if ('serviceWorker' in navigator) {
+  const swBlob = new Blob([`self.addEventListener('fetch',()=>{})`], {type:'text/javascript'});
+  const swUrl = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swUrl);
+}
+</script>
+</body>
+</html>
