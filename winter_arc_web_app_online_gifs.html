@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Winter Arc Trainer — GIFs</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0ea5e9">
+<style>
+  :root { --bg:#0b1220; --card:#0f172a; --ink:#e5e7eb; --muted:#94a3b8; --accent:#0ea5e9; --good:#22c55e; }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--ink);}
+  header{position:sticky;top:0;z-index:10;background:rgba(11,18,32,.7);backdrop-filter:saturate(1.2) blur(8px);border-bottom:1px solid #1f2937}
+  .wrap{max-width:980px;margin:0 auto;padding:16px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .grid{display:grid;gap:12px}
+  .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:14px}
+  h1{font-size:20px;margin:0;display:flex;align-items:center;gap:10px}
+  .btn{appearance:none;border:none;border-radius:12px;padding:10px 14px;background:#111827;color:var(--ink);border:1px solid #1f2937;cursor:pointer}
+  .btn.primary{background:var(--accent);color:white;border-color:transparent}
+  select{background:#0b1220;color:var(--ink);border:1px solid #1f2937;border-radius:10px;padding:8px 10px}
+  .tabs{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .tab{padding:8px;border:1px solid #1f2937;border-radius:10px;text-align:center;background:#0b1220;cursor:pointer;font-size:13px}
+  .tab.active{background:#111827;border-color:#334155}
+  .exercise{display:flex;gap:12px;align-items:center;padding:10px;border:1px solid #1f2937;border-radius:12px;background:#0b1220}
+  .exercise img{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid #1f2937;background:#0b1220}
+  .exercise .meta{flex:1;min-width:0}
+  .title{font-weight:600}
+  .muted{color:var(--muted);font-size:12px}
+  .checkbox{width:28px;height:28px;border-radius:8px;border:2px solid #334155;display:grid;place-items:center;cursor:pointer}
+  .checkbox.done{background:var(--good);border-color:var(--good)}
+  .checkbox svg{width:18px;height:18px;fill:none;stroke:white;stroke-width:3;opacity:0}
+  .checkbox.done svg{opacity:1}
+  .status{font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap row" style="justify-content:space-between;">
+    <h1>🏋️ Winter Arc Trainer — GIFs</h1>
+    <div class="row">
+      <button class="btn" id="importCsvBtn">Import CSV</button>
+      <input class="hidden" id="csvInput" type="file" accept=".csv,text/csv" style="display:none"/>
+      <button class="btn" id="fetchGifsBtn">Fetch GIFs online</button>
+      <button class="btn" id="exportBtn">Export</button>
+      <button class="btn primary" id="installBtn">Install</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap grid" style="padding-top:12px;padding-bottom:90px;">
+  <section class="card grid">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div class="row" style="gap:10px">
+        <label>Week</label>
+        <select id="weekSelect"></select>
+      </div>
+      <div class="row status" id="status">No plan</div>
+    </div>
+    <div class="tabs" id="dayTabs"></div>
+    <div id="exList" class="grid"></div>
+    <div class="muted">GIFs are fetched from Wikipedia/Wikimedia Commons (best‑effort) and saved locally for offline use.</div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+function keyFor(w, d, name) { return `${w}|${d}|${name}`; }
+
+let PLAN = JSON.parse(localStorage.getItem('wa_plan') || '[]');
+let PROGRESS = JSON.parse(localStorage.getItem('wa_progress') || '{}');
+let IMAGE_MAP = JSON.parse(localStorage.getItem('wa_image_map') || '{}'); // exercise -> filename
+let IMG_DATA = JSON.parse(localStorage.getItem('wa_images_data') || '{}'); // filename -> dataURL (GIFs too)
+
+function saveAll(){
+  localStorage.setItem('wa_plan', JSON.stringify(PLAN));
+  localStorage.setItem('wa_progress', JSON.stringify(PROGRESS));
+  localStorage.setItem('wa_image_map', JSON.stringify(IMAGE_MAP));
+  localStorage.setItem('wa_images_data', JSON.stringify(IMG_DATA));
+}
+
+const weekSelect = $('#weekSelect'), dayTabs = $('#dayTabs'), exList = $('#exList'), statusEl = $('#status');
+const csvInput = $('#csvInput');
+const importCsvBtn = $('#importCsvBtn'), exportBtn = $('#exportBtn'), fetchGifsBtn = $('#fetchGifsBtn'), installBtn = $('#installBtn');
+
+function parseCSV(text){
+  const rows = []; let i=0, field='', row=[], q=false;
+  while(i<text.length){ const c=text[i];
+    if(q){ if(c=='"'){ if(text[i+1]=='"'){ field+='"'; i++; } else q=false; } else field+=c; }
+    else { if(c=='"') q=true; else if(c==','){ row.push(field.trim()); field=''; }
+      else if(c=='\n'||c=='\r'){ if(field.length||row.length){ row.push(field.trim()); rows.push(row); row=[]; field=''; } if(c=='\r'&&text[i+1]=='\n') i++; }
+      else field+=c; }
+    i++;
+  }
+  if(field.length||row.length){ row.push(field.trim()); rows.push(row); }
+  return rows;
+}
+
+function refreshWeekSelect(){
+  const weeks = [...new Set(PLAN.map(r=>Number(r.week)).filter(Boolean))].sort((a,b)=>a-b);
+  weekSelect.innerHTML = weeks.length? weeks.map(w=>`<option value="${w}">Week ${w}</option>`).join('') : `<option value="1">Week 1</option>`;
+  if(!weeks.length) weekSelect.value="1";
+}
+function renderTabs(active){
+  dayTabs.innerHTML = DAYS.map(d=>`<button class="tab ${d===active?'active':''}" data-day="${d}">${d.slice(0,3)}</button>`).join('');
+  dayTabs.querySelectorAll('.tab').forEach(b=> b.onclick=()=>{ renderTabs(b.dataset.day); renderList(Number(weekSelect.value), b.dataset.day); });
+}
+function renderList(week, day){
+  const rows = PLAN.filter(r => Number(r.week)===Number(week) && r.day.toLowerCase()===day.toLowerCase());
+  if(!rows.length){ exList.innerHTML = `<div class="muted">No exercises for ${day} in Week ${week}.</div>`; return; }
+  exList.innerHTML='';
+  rows.forEach(r=>{
+    const k = keyFor(week, day, r.exercise);
+    const done = !!PROGRESS[k];
+    const mapped = IMAGE_MAP[r.exercise] || r.image || '';
+    const dataUrl = mapped && IMG_DATA[mapped] ? IMG_DATA[mapped] : '';
+    const div = document.createElement('div');
+    div.className='exercise';
+    div.innerHTML = `
+      ${dataUrl ? `<img alt="gif" src="${dataUrl}">` : `<div style="width:72px;height:72px;border:1px dashed #334155;border-radius:10px;display:grid;place-items:center" class="muted">No GIF</div>`}
+      <div class="meta">
+        <div class="title">${r.exercise}</div>
+        <div class="muted">${r.reps||''}</div>
+      </div>
+      <div class="checkbox ${done?'done':''}" data-key="${k}">
+        <svg viewBox="0 0 24 24"><path d="M4 12l5 5 11-11"/></svg>
+      </div>`;
+    exList.appendChild(div);
+  });
+  exList.querySelectorAll('.checkbox').forEach(b=> b.onclick=()=>{
+    const k=b.dataset.key; if(b.classList.toggle('done')) PROGRESS[k]=true; else delete PROGRESS[k]; saveAll();
+  });
+  updateStatus();
+}
+function updateStatus(){
+  statusEl.textContent = `${PLAN.length} items • ${Object.keys(PROGRESS).length} done • media saved: ${Object.keys(IMG_DATA).length}`;
+}
+
+// --- Import CSV ---
+importCsvBtn.onclick = ()=> csvInput.click();
+csvInput.onchange = async (e)=>{
+  const f = e.target.files?.[0]; if(!f) return;
+  const rows = parseCSV(await f.text());
+  if(!rows.length) return alert('Empty CSV');
+  const head = rows[0].map(h=>h.toLowerCase());
+  const idx = {week:head.indexOf('week'), day:head.indexOf('day'), exercise:head.indexOf('exercise'), reps:head.indexOf('reps'), image:head.indexOf('image')};
+  if(Object.values(idx).some(i=>i===-1)) return alert('CSV must include: week, day, exercise, reps, image');
+  PLAN = rows.slice(1).map(r=>({week:r[idx.week], day:r[idx.day], exercise:r[idx.exercise], reps:r[idx.reps], image:r[idx.image]}));
+  saveAll();
+  refreshWeekSelect();
+  renderTabs(DAYS[new Date().getDay()-1]||'Monday');
+  renderList(Number(weekSelect.value), DAYS[new Date().getDay()-1]||'Monday');
+  csvInput.value='';
+};
+
+// --- GIF fetching from Wikimedia Commons / Wikipedia ---
+const QUERY_HINTS = {
+  "glute bridge":"glute bridge exercise gif",
+  "hip thrust":"hip thrust exercise gif",
+  "leg press":"leg press machine exercise gif",
+  "leg curl":"hamstring curl machine gif",
+  "calf raise":"standing calf raise gif",
+  "seated row":"seated row machine gif",
+  "lat pulldown":"lat pulldown machine gif",
+  "back extension":"back extension exercise gif",
+  "face pull":"face pull cable gif",
+  "kickback":"glute kickback cable gif",
+  "band walk":"lateral band walk gif",
+  "treadmill":"treadmill walking gif",
+  "bike":"stationary bike gif",
+  "bird dog":"bird dog exercise gif",
+  "side plank":"side plank exercise gif",
+  "walk":"brisk walk gif",
+  "stretch":"hip stretch gif"
+};
+function guessQuery(name){
+  const n = norm(name);
+  for(const k in QUERY_HINTS){ if(n.includes(k)) return QUERY_HINTS[k]; }
+  return name + " exercise gif";
+}
+
+async function commonsGifSearch(query){
+  try{
+    // Use generator=search then request imageinfo; we'll filter for mime=image/gif
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrlimit=5&gsrsearch=${encodeURIComponent(query)}&prop=imageinfo&iiprop=url|mime|size|mediatype&iiurlwidth=400`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const pages = data?.query?.pages || {};
+    const candidates = [];
+    for(const k in pages){
+      const p = pages[k];
+      const info = p.imageinfo && p.imageinfo[0];
+      if(!info) continue;
+      const isGif = (info.mime && info.mime.includes('gif')) || (info.url && /\.gif($|\?)/i.test(info.url));
+      if(isGif) candidates.push(info.thumburl || info.url);
+    }
+    return candidates[0] || null;
+  }catch(e){ return null; }
+}
+
+async function wikipediaGifFromTitle(title){
+  try{
+    const url = `https://en.wikipedia.org/w/api.php?action=query&prop=images&format=json&imlimit=20&origin=*&titles=${encodeURIComponent(title)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const pages = data?.query?.pages || {};
+    const imageTitles = [];
+    for(const k in pages){
+      const imgs = pages[k].images || [];
+      imgs.forEach(x => { if(x.title.toLowerCase().endsWith('.gif')) imageTitles.push(x.title); });
+    }
+    for(const it of imageTitles){
+      const fi = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(it)}&prop=imageinfo&iiprop=url&iiurlwidth=400&format=json&origin=*`;
+      const r2 = await fetch(fi);
+      const d2 = await r2.json();
+      const p2 = d2?.query?.pages || {};
+      for(const kk in p2){
+        const info = p2[kk].imageinfo && p2[kk].imageinfo[0];
+        if(info && (info.thumburl || info.url)) return info.thumburl || info.url;
+      }
+    }
+  }catch(e){ return null; }
+  return null;
+}
+
+function blobToDataURL(blob){
+  return new Promise((resolve,reject)=>{
+    const fr = new FileReader();
+    fr.onload = ()=> resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(blob);
+  });
+}
+async function downloadToDataURL(url){
+  try{
+    const res = await fetch(url, {mode:'cors'});
+    const blob = await res.blob();
+    return await blobToDataURL(blob);
+  }catch(e){ return null; }
+}
+
+fetchGifsBtn.onclick = async ()=>{
+  const uniqueExercises = [...new Set(PLAN.map(p=>p.exercise))];
+  let fetched = 0;
+  for(const ex of uniqueExercises){
+    if(IMAGE_MAP[ex]) continue; // already mapped
+    const q = guessQuery(ex);
+    let link = await commonsGifSearch(q);
+    if(!link){
+      // try Wikipedia page with likely title (less reliable, but sometimes finds embedded GIFs)
+      link = await wikipediaGifFromTitle(ex);
+    }
+    if(!link) { console.log('no gif for', ex); continue; }
+    const dataUrl = await downloadToDataURL(link);
+    if(!dataUrl) continue;
+    const fname = `gif_${norm(ex).replace(/\s+/g,'_')}.gif`;
+    IMG_DATA[fname] = dataUrl;
+    IMAGE_MAP[ex] = fname;
+    fetched++;
+    saveAll();
+    const active = document.querySelector('.tab.active')?.dataset.day || DAYS[0];
+    renderList(Number(weekSelect.value), active);
+  }
+  updateStatus();
+  alert(`Fetched GIFs for ${fetched} exercises.`);
+};
+
+// --- Init ---
+(function init(){
+  refreshWeekSelect();
+  renderTabs(DAYS[new Date().getDay()-1]||'Monday');
+  renderList(Number(weekSelect.value), DAYS[new Date().getDay()-1]||'Monday');
+  updateStatus();
+})();
+
+// --- Export ---
+exportBtn.onclick = ()=>{
+  const lines = ['week,day,exercise,reps,done,imageFile'];
+  PLAN.forEach(r => {
+    const k = keyFor(r.week, r.day, r.exercise);
+    const mapped = IMAGE_MAP[r.exercise] || r.image || '';
+    lines.push([r.week, r.day, JSON.stringify(r.exercise), JSON.stringify(r.reps||''), PROGRESS[k]?'1':'0', JSON.stringify(mapped)].join(','));
+  });
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'winter_arc_progress.csv';
+  a.click();
+};
+
+// --- PWA basics ---
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; installBtn.disabled=false; });
+installBtn.onclick = ()=>{ if (deferredPrompt) deferredPrompt.prompt(); else alert('Share → Add to Home Screen'); };
+if ('serviceWorker' in navigator) {
+  const swBlob = new Blob([`self.addEventListener('fetch',()=>{})`], {type:'text/javascript'});
+  const swUrl = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swUrl);
+}
+</script>
+</body>
+</html>
