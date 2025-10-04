@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Winter Arc — Persist Online Images</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0ea5e9">
+<style>
+  :root { --bg:#0b1220; --card:#0f172a; --ink:#e5e7eb; --muted:#94a3b8; --accent:#0ea5e9; --good:#22c55e; --warn:#f59e0b; }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--ink);}
+  header{position:sticky;top:0;z-index:10;background:rgba(11,18,32,.7);backdrop-filter:saturate(1.2) blur(8px);border-bottom:1px solid #1f2937}
+  .wrap{max-width:980px;margin:0 auto;padding:16px}
+  h1{font-size:20px;margin:0;display:flex;align-items:center;gap:10px}
+  .grid{display:grid;gap:12px}
+  .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn{appearance:none;border:none;border-radius:12px;padding:10px 14px;background:#111827;color:var(--ink);border:1px solid #1f2937;cursor:pointer}
+  .btn.primary{background:var(--accent);color:white;border-color:transparent}
+  .btn.good{background:var(--good);color:white;border-color:transparent}
+  .btn.warn{background:var(--warn);color:black;border-color:transparent}
+  select,input[type=text]{background:#0b1220;color:var(--ink);border:1px solid #1f2937;border-radius:10px;padding:8px 10px}
+  .tabs{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .tab{padding:8px;border:1px solid #1f2937;border-radius:10px;text-align:center;background:#0b1220;cursor:pointer;font-size:13px}
+  .tab.active{background:#111827;border-color:#334155}
+  .exercise{display:flex;gap:12px;align-items:center;padding:10px;border:1px solid #1f2937;border-radius:12px;background:#0b1220}
+  .thumb{width:72px;height:72px;border-radius:10px;border:1px solid #1f2937;display:grid;place-items:center;overflow:hidden;background:#0b1220}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .exercise .meta{flex:1;min-width:0}
+  .title{font-weight:600}
+  .muted{color:var(--muted);font-size:12px}
+  .checkbox{width:28px;height:28px;border-radius:8px;border:2px solid #334155;display:grid;place-items:center;cursor:pointer}
+  .checkbox.done{background:var(--good);border-color:var(--good)}
+  .checkbox svg{width:18px;height:18px;fill:none;stroke:white;stroke-width:3;opacity:0}
+  .checkbox.done svg{opacity:1}
+  .pill{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid #1f2937;background:#0b1220}
+  details{background:#0b1220;border:1px solid #1f2937;border-radius:12px;padding:8px}
+  details pre{white-space:pre-wrap;color:#93c5fd}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap row" style="justify-content:space-between;">
+    <h1>🏋️ Winter Arc — Persist Online Images</h1>
+    <div class="row">
+      <label for="csvInput" class="btn">Import CSV</label>
+      <input id="csvInput" type="file" accept=".csv,text/csv" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+      <button class="btn" id="mapperBtn">Image Mapper</button>
+      <button class="btn good" id="autoBtn">Auto‑assign (online)</button>
+      <button class="btn primary" id="installBtn">Install</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap grid" style="padding-top:12px;padding-bottom:90px;">
+  <section class="card grid">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div class="row" style="gap:10px">
+        <label>Week</label><select id="weekSelect"></select>
+        <span class="pill" id="status">No plan</span>
+      </div>
+      <div class="row"><button class="btn" id="exportBtn">Export</button></div>
+    </div>
+    <div class="tabs" id="dayTabs"></div>
+    <div id="exList" class="grid"></div>
+    <details>
+      <summary>Fetcher log</summary>
+      <pre id="log"></pre>
+    </details>
+  </section>
+</main>
+
+<!-- Simple mapper modal -->
+<div id="modal" class="modal" style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6)">
+  <div style="background:#0f172a;border:1px solid #1f2937;border-radius:16px;max-width:900px;width:96%;padding:14px;" class="grid">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <b>Image Mapper</b>
+      <div class="row">
+        <input id="searchEx" placeholder="Search exercise…" type="text">
+        <button class="btn" id="onlineFetchBtn">Fetch online for selected</button>
+        <button class="btn" id="closeModal">Close</button>
+      </div>
+    </div>
+    <div id="mapperList" class="grid"></div>
+  </div>
+</div>
+
+<script>
+// ---------- Utilities ----------
+const $ = s => document.querySelector(s);
+const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+function tokens(s){ return norm(s).split(' ').filter(Boolean); }
+function keyFor(w,d,n){ return `${w}|${d}|${n}`; }
+function log(m){ $('#log').textContent += m + "\\n"; }
+
+// ---------- State ----------
+let PLAN = JSON.parse(localStorage.getItem('wa_plan') || '[]');
+let PROGRESS = JSON.parse(localStorage.getItem('wa_progress') || '{}');
+let IMAGE_MAP = JSON.parse(localStorage.getItem('wa_image_map') || '{}'); // exercise -> fname
+let IMG_DATA = JSON.parse(localStorage.getItem('wa_images_data') || '{}'); // fname -> dataURL
+let IMAGES = {}; // fname -> ObjectURL
+
+function saveAll(){
+  localStorage.setItem('wa_plan', JSON.stringify(PLAN));
+  localStorage.setItem('wa_progress', JSON.stringify(PROGRESS));
+  localStorage.setItem('wa_image_map', JSON.stringify(IMAGE_MAP));
+  localStorage.setItem('wa_images_data', JSON.stringify(IMG_DATA));
+}
+
+// ---------- File helpers ----------
+function dataURLtoBlob(dataURL){
+  const [h, data] = dataURL.split(',');
+  const mime = (h.match(/data:(.*?);base64/)||[])[1] || 'image/jpeg';
+  const bin = atob(data); const arr = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return new Blob([arr], {type:mime});
+}
+function blobToDataURL(blob){
+  return new Promise((resolve,reject)=>{
+    const fr = new FileReader();
+    fr.onload = ()=> resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(blob);
+  });
+}
+function registerImage(name, dataUrl){
+  IMG_DATA[name] = dataUrl;
+  if(IMAGES[name]) URL.revokeObjectURL(IMAGES[name]);
+  IMAGES[name] = URL.createObjectURL(dataURLtoBlob(dataUrl));
+  saveAll();
+}
+
+// ---------- UI refs ----------
+const weekSelect = $('#weekSelect'), dayTabs = $('#dayTabs'), exList = $('#exList'), statusEl = $('#status');
+const csvInput = $('#csvInput'), autoBtn = $('#autoBtn'), installBtn = $('#installBtn'), exportBtn = $('#exportBtn');
+const modal = $('#modal'), mapperBtn = $('#mapperBtn'), closeModal = $('#closeModal'), mapperList = $('#mapperList'), searchEx = $('#searchEx'), onlineFetchBtn = $('#onlineFetchBtn');
+
+// ---------- CSV parser ----------
+function parseCSV(text){
+  const rows = []; let i=0, field='', row=[], q=false;
+  while(i<text.length){ const c=text[i];
+    if(q){ if(c=='"'){ if(text[i+1]=='"'){ field+='"'; i++; } else q=false; } else field+=c; }
+    else { if(c=='"') q=true; else if(c==','){ row.push(field.trim()); field=''; }
+      else if(c=='\n'||c=='\r'){ if(field.length||row.length){ row.push(field.trim()); rows.push(row); row=[]; field=''; } if(c=='\r'&&text[i+1]=='\n') i++; }
+      else field+=c; }
+    i++;
+  }
+  if(field.length||row.length){ row.push(field.trim()); rows.push(row); }
+  return rows;
+}
+
+csvInput.addEventListener('change', async (e)=>{
+  const f = e.target.files?.[0]; if(!f) return;
+  const text = await f.text();
+  const rows = parseCSV(text);
+  if(!rows.length) return alert('Empty CSV');
+  const head = rows[0].map(h=>h.toLowerCase().trim());
+  const idx = {week:head.indexOf('week'), day:head.indexOf('day'), exercise:head.indexOf('exercise'), reps:head.indexOf('reps'), image:head.indexOf('image')};
+  if(Object.values(idx).some(i=>i===-1)) return alert('CSV must include: week, day, exercise, reps, image');
+  PLAN = rows.slice(1).filter(r=>r.length>=4).map(r=>({week:r[idx.week], day:r[idx.day], exercise:r[idx.exercise], reps:r[idx.reps], image:r[idx.image]||''}));
+  saveAll();
+  refreshWeekSelect();
+  renderTabs(DAYS[new Date().getDay()-1]||'Monday');
+  renderList(Number(weekSelect.value), DAYS[new Date().getDay()-1]||'Monday');
+  statusEl.textContent = `Imported ${PLAN.length} rows`;
+  csvInput.value='';
+});
+
+// ---------- Rendering ----------
+function refreshWeekSelect(){
+  const weeks = [...new Set(PLAN.map(r=>Number(r.week)).filter(Boolean))].sort((a,b)=>a-b);
+  weekSelect.innerHTML = weeks.length? weeks.map(w=>`<option value="${w}">Week ${w}</option>`).join('') : `<option value="1">Week 1</option>`;
+  if(!weeks.length) weekSelect.value="1";
+}
+function renderTabs(active){
+  dayTabs.innerHTML = DAYS.map(d=>`<button class="tab ${d===active?'active':''}" data-day="${d}">${d.slice(0,3)}</button>`).join('');
+  dayTabs.querySelectorAll('.tab').forEach(b=> b.onclick=()=>{ renderTabs(b.dataset.day); renderList(Number(weekSelect.value), b.dataset.day); });
+}
+function renderList(week, day){
+  const rows = PLAN.filter(r => Number(r.week)===Number(week) && r.day.toLowerCase()===day.toLowerCase());
+  if(!rows.length){ exList.innerHTML = `<div class="muted">No exercises for ${day} in Week ${week}.</div>`; return; }
+  exList.innerHTML='';
+  rows.forEach(r=>{
+    const k = keyFor(week, day, r.exercise);
+    const done = !!PROGRESS[k];
+    const fname = IMAGE_MAP[r.exercise] || r.image || '';
+    const objUrl = fname && IMAGES[fname] ? IMAGES[fname] : '';
+    const card = document.createElement('div');
+    card.className='exercise';
+    card.innerHTML = `
+      ${objUrl ? `<div class="thumb"><img alt="img" src="${objUrl}"></div>` : `<div class="thumb"><span class="muted">No image</span></div>`}
+      <div class="meta">
+        <div class="title">${r.exercise}</div>
+        <div class="muted">${r.reps||''}</div>
+      </div>
+      <div class="checkbox ${done?'done':''}" data-key="${k}">
+        <svg viewBox="0 0 24 24"><path d="M4 12l5 5 11-11"/></svg>
+      </div>`;
+    exList.appendChild(card);
+  });
+  exList.querySelectorAll('.checkbox').forEach(b=> b.onclick=()=>{
+    const k=b.dataset.key; if(b.classList.toggle('done')) PROGRESS[k]=true; else delete PROGRESS[k]; saveAll();
+  });
+  updateStatus();
+}
+function updateStatus(){
+  statusEl.textContent = `${PLAN.length} items • ${Object.keys(PROGRESS).length} done • images saved: ${Object.keys(IMG_DATA).length}`;
+}
+
+// ---------- Online search (Wikipedia/Commons) ----------
+const QUERY_HINTS = {
+  "leg press":"leg press machine exercise",
+  "leg curl":"leg curl machine hamstring curl",
+  "glute bridge":"glute bridge exercise",
+  "hip thrust":"hip thrust exercise",
+  "calf":"standing calf raise machine",
+  "treadmill":"treadmill walking incline",
+  "bike":"stationary bike gym",
+  "kickback":"glute kickback cable",
+  "band walk":"lateral band walk",
+  "seated row":"seated row machine",
+  "lat pulldown":"lat pulldown machine",
+  "back extension":"back extension roman chair",
+  "face pull":"face pull cable",
+  "bird dog":"bird dog exercise",
+  "side plank":"side plank exercise",
+  "walk":"brisk walk exercise",
+  "stretch":"hip stretch back stretch"
+};
+function guessQuery(name){
+  const n = norm(name);
+  for(const k in QUERY_HINTS){ if(n.includes(k)) return QUERY_HINTS[k]; }
+  return name + " exercise gym";
+}
+async function fetchWikiThumb(title){
+  try{
+    const url = `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=thumbnail&pithumbsize=400&origin=*&titles=${encodeURIComponent(title)}`;
+    const res = await fetch(url); const data = await res.json();
+    const pages = data?.query?.pages || {};
+    for(const k in pages){ const p = pages[k]; if(p.thumbnail && p.thumbnail.source) return p.thumbnail.source; }
+  }catch(e){}
+  return null;
+}
+async function fetchCommonsSearch(query){
+  try{
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&prop=imageinfo&iiprop=url&iiurlwidth=400&generator=search&gsrlimit=1&gsrsearch=${encodeURIComponent(query)}`;
+    const res = await fetch(url); const data = await res.json();
+    const pages = data?.query?.pages || {};
+    for(const k in pages){
+      const info = pages[k].imageinfo && pages[k].imageinfo[0];
+      if(info && info.thumburl) return info.thumburl;
+      if(info && info.url) return info.url;
+    }
+  }catch(e){}
+  return null;
+}
+async function downloadToDataURL(url){
+  try{
+    const res = await fetch(url, {mode:'cors'});
+    const blob = await res.blob();
+    return await blobToDataURL(blob);
+  }catch(e){ return null; }
+}
+
+// ---------- Auto-assign (online) ----------
+async function autoAssignOnline(){
+  const uniq = [...new Set(PLAN.map(p=>p.exercise))];
+  let ok=0;
+  for(const ex of uniq){
+    if(IMAGE_MAP[ex]) continue;
+    const q = guessQuery(ex);
+    log(`Searching ${q}`);
+    let link = await fetchWikiThumb(q);
+    if(!link) link = await fetchCommonsSearch(q);
+    if(!link){ log(`No image for ${ex}`); continue; }
+    const dataUrl = await downloadToDataURL(link);
+    if(!dataUrl){ log(`Download failed for ${ex}`); continue; }
+    const fname = `web_${norm(ex).replace(/\s+/g,'_')}.jpg`;
+    registerImage(fname, dataUrl);
+    IMAGE_MAP[ex] = fname;
+    ok++; saveAll();
+    const active = document.querySelector('.tab.active')?.dataset.day || DAYS[0];
+    renderList(Number(weekSelect.value), active);
+  }
+  updateStatus();
+  alert(`Fetched images for ${ok} exercises.`);
+}
+autoBtn.onclick = autoAssignOnline;
+
+// ---------- Mapper ----------
+let selectedExercise = null;
+function buildMapperLists(){
+  const uniq = [...new Set(PLAN.map(p=>p.exercise))].sort((a,b)=>a.localeCompare(b));
+  const q = norm(searchEx.value);
+  mapperList.innerHTML = uniq
+    .filter(n => !q || norm(n).includes(q))
+    .map(n => {
+      const fname = IMAGE_MAP[n] || '';
+      const preview = fname && IMAGES[fname] ? `<img src="${IMAGES[fname]}" style="width:52px;height:52px;object-fit:cover;border-radius:10px;border:1px solid #334155">` : `<span class="muted">None</span>`;
+      return `<div class="row" style="justify-content:space-between;align-items:center;border-top:1px solid #1f2937;padding:8px 0">
+        <div class="row" style="gap:10px;align-items:center"><input type="radio" name="exsel" value="${n}">${n}</div>
+        <div>${preview}</div>
+      </div>`;
+    }).join('');
+  mapperList.querySelectorAll('input[name="exsel"]').forEach(r=> r.onchange = ()=> { selectedExercise = r.value; });
+}
+mapperBtn.onclick = ()=>{ buildMapperLists(); modal.style.display='flex'; };
+closeModal.onclick = ()=>{ modal.style.display='none'; };
+searchEx.oninput = buildMapperLists;
+
+onlineFetchBtn.onclick = async ()=>{
+  if(!selectedExercise) return alert('Select an exercise first');
+  const q = guessQuery(selectedExercise);
+  let link = await fetchWikiThumb(q);
+  if(!link) link = await fetchCommonsSearch(q);
+  if(!link) return alert('No online image found');
+  const dataUrl = await downloadToDataURL(link);
+  if(!dataUrl) return alert('Download failed');
+  const fname = `web_${norm(selectedExercise).replace(/\s+/g,'_')}.jpg`;
+  registerImage(fname, dataUrl);
+  IMAGE_MAP[selectedExercise] = fname;
+  saveAll();
+  buildMapperLists();
+  const active = document.querySelector('.tab.active')?.dataset.day || DAYS[0];
+  renderList(Number(weekSelect.value), active);
+};
+
+// ---------- Export ----------
+exportBtn.onclick = ()=>{
+  const lines = ['week,day,exercise,reps,done,imageFile'];
+  PLAN.forEach(r => {
+    const k = keyFor(r.week, r.day, r.exercise);
+    const fname = IMAGE_MAP[r.exercise] || r.image || '';
+    lines.push([r.week, r.day, JSON.stringify(r.exercise), JSON.stringify(r.reps||''), PROGRESS[k]?'1':'0', JSON.stringify(fname)].join(','));
+  });
+  const blob = new Blob([lines.join('\\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'winter_arc_progress.csv';
+  a.click();
+};
+
+// ---------- Init & PWA ----------
+(function init(){
+  // Rehydrate IMAGES from saved data URLs so they display every launch/shortcut
+  for(const [name, dataUrl] of Object.entries(IMG_DATA)){
+    IMAGES[name] = URL.createObjectURL(dataURLtoBlob(dataUrl));
+  }
+  refreshWeekSelect();
+  renderTabs(DAYS[new Date().getDay()-1]||'Monday');
+  renderList(Number(weekSelect.value), DAYS[new Date().getDay()-1]||'Monday');
+  updateStatus();
+})();
+
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; });
+installBtn.onclick = ()=>{ if (deferredPrompt) deferredPrompt.prompt(); else alert('Share → Add to Home Screen'); };
+if('serviceWorker' in navigator){
+  const sw = new Blob([`self.addEventListener('fetch',()=>{})`], {type:'text/javascript'});
+  const url = URL.createObjectURL(sw);
+  navigator.serviceWorker.register(url);
+}
+</script>
+</body>
+</html>
